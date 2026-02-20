@@ -1,43 +1,32 @@
 from ultralytics import YOLO
 import cv2
-import numpy as np
-from google.colab.patches import cv2_imshow
 
-# Load your trained segmentation model
-model = YOLO(r"D:\Raspberry Pi\best (1).pt")
+# 1. Load a pre-trained YOLOv8 model
+model = YOLO('yolov8n.pt')  
 
-# Path to test image
-image_path = r"D:\Raspberry Pi\BOX_SEGMENTATION_DATASET_TEMPLATE\Labeled_Project\YOLOv8_Format\basket2.v1i.yolov8\test\images\000200_jpg.rf.65589a6ff5499c3ca30191072c72d710.jpg"
-img = cv2.imread(image_path)
+# 2. Start video capture (0 is default webcam)
+cap = cv2.VideoCapture(0)
 
-# Run prediction
-results = model.predict(source=img, conf=0.3, verbose=False)
-r = results[0]
+# Set resolution to wide (e.g., 1280x720 or 1920x1080 if supported)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-# If no detections, skip gracefully
-if r.masks is None or r.boxes is None or len(r.boxes) == 0:
-    print("⚠️ No objects detected in this image.")
-else:
-    for box, mask, conf, cls in zip(r.boxes.xyxy, r.masks.data, r.boxes.conf, r.boxes.cls):
-        x1, y1, x2, y2 = map(int, box)
-        conf = float(conf)
-        cls_name = model.names[int(cls)]
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
 
-        # Draw bounding box
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    # 3. Run YOLO inference
+    # For very distorted lenses, consider preprocessing to undistort
+    results = model(frame)
 
-        # Label
-        label = f"{cls_name} {conf:.2f}"
-        cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    # 4. Visualize the results
+    annotated_frame = results[0].plot()
+    cv2.imshow("Wide Angle YOLO Detection", annotated_frame)
 
-        # Apply segmentation mask
-        mask = mask.cpu().numpy()
-        mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
-        colored_mask = np.zeros_like(img, dtype=np.uint8)
-        colored_mask[:, :, 1] = (mask * 255).astype(np.uint8)
-        img = cv2.addWeighted(img, 1, colored_mask, 0.5, 0)
+    # Exit on 'q'
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-    from google.colab.patches import cv2_imshow
-    cv2_imshow(img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+cap.release()
+cv2.destroyAllWindows()
